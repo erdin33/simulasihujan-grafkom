@@ -12,7 +12,7 @@ from sky_clouds import draw_sky, draw_clouds
 
 
 # ================= SETUP OPENGL =================
-def setup_opengl():
+def setup_opengl(w, h):
     glClearColor(0.10, 0.25, 0.55, 1.0)
 
     glEnable(GL_DEPTH_TEST)
@@ -20,7 +20,7 @@ def setup_opengl():
 
     glMatrixMode(GL_PROJECTION)
     glLoadIdentity()
-    gluPerspective(60.0, WINDOW_W / WINDOW_H, 0.1, 300.0)
+    gluPerspective(60.0, w / h, 0.1, 300.0)
 
     glMatrixMode(GL_MODELVIEW)
 
@@ -56,10 +56,13 @@ def render(camera, terrain, particles, time):
 # ================= MAIN =================
 def main():
     pygame.init()
-    pygame.display.set_mode((WINDOW_W, WINDOW_H), DOUBLEBUF | OPENGL)
+
+    display_flags = DOUBLEBUF | OPENGL | RESIZABLE
+    current_w, current_h = WINDOW_W, WINDOW_H
+    pygame.display.set_mode((current_w, current_h), display_flags)
     pygame.display.set_caption(TITLE)
 
-    setup_opengl()
+    setup_opengl(current_w, current_h)
 
     camera    = Camera()
     terrain   = Terrain()
@@ -69,6 +72,9 @@ def main():
     time  = 0.0
 
     print("=== SIMULASI SIKLUS AIR ===")
+
+    pygame.event.set_grab(True)
+    pygame.mouse.set_visible(False)
 
     while True:
         dt    = clock.tick(FPS) / 1000.0
@@ -84,6 +90,19 @@ def main():
                 if event.key == K_ESCAPE:
                     pygame.quit()
                     sys.exit()
+
+            if event.type == VIDEORESIZE:
+                current_w, current_h = event.w, event.h
+                if current_h == 0:
+                    current_h = 1
+
+                pygame.display.set_mode((current_w, current_h), display_flags)
+                setup_opengl(current_w, current_h)
+                glViewport(0, 0, current_w, current_h)
+
+            if event.type == MOUSEMOTION:
+                dx, dy = event.rel
+                camera.rotate(dx, dy)
 
         # INPUT
         keys = pygame.key.get_pressed()

@@ -3,8 +3,8 @@
 # ============================================================
 
 # Window
-WINDOW_W    = 1000
-WINDOW_H    = 700
+WINDOW_W    = 800
+WINDOW_H    = 600
 FPS         = 60
 TITLE       = "Simulasi Siklus Air — OpenGL"
 
