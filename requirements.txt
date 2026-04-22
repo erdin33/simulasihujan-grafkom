@@ -1,0 +1,5 @@
+pyrr
+numpy
+pygame
+PyOpenGL
+PyOpenGL_accelerate
