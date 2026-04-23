@@ -76,6 +76,8 @@ def main():
     pygame.event.set_grab(True)
     pygame.mouse.set_visible(False)
 
+    is_focused = True
+
     while True:
         dt    = clock.tick(FPS) / 1000.0
         time += dt
@@ -99,10 +101,22 @@ def main():
                 pygame.display.set_mode((current_w, current_h), display_flags)
                 setup_opengl(current_w, current_h)
                 glViewport(0, 0, current_w, current_h)
+            
+            if event.type == WINDOWFOCUSLOST:
+                is_focused = False
+                pygame.event.set_grab(False)
+                pygame.mouse.set_visible(True)
+            
+            if event.type == WINDOWFOCUSGAINED:
+                is_focused = True
+                pygame.event.set_grab(True)
+                pygame.mouse.set_visible(False)
+                pygame.mouse.get_rel()
 
             if event.type == MOUSEMOTION:
-                dx, dy = event.rel
-                camera.rotate(dx, dy)
+                if is_focused:
+                    dx, dy = event.rel
+                    camera.rotate(dx, dy)
 
         # INPUT
         keys = pygame.key.get_pressed()
