@@ -143,21 +143,12 @@ def _build_cloud_mesh(seed, num_blobs=7):
     return all_faces
 
 
-# Cache mesh: {seed: list_of_faces}
-_CLOUD_MESHES = {}
+# Hanya satu awan dinamis untuk siklus air
+import numpy as np
 
-# Definisi awan: (seed, base_x, y_offset, base_z, scale, drift_speed)
-_CLOUD_DEFS = [
-    (1,  -7.0,  0.0,  -4.5,  2.4,  0.035),
-    (2,  -2.0,  0.8,   3.5,  3.0,  0.050),
-    (3,   4.5,  0.3,  -1.5,  2.0,  0.028),
-    (4,  -5.0,  1.2,   7.0,  2.2,  0.042),
-    (5,   7.5,  0.5,   5.0,  1.8,  0.060),
-    (6,   1.5,  1.5,  -7.0,  2.6,  0.033),
-    (7,  -9.5,  0.9,   2.5,  1.5,  0.055),
-    (8,   9.0,  0.4,  -3.5,  2.1,  0.047),
-    (8,   9.0,  0.4,  -3.5,  2.1,  0.075),
-]
+_MAIN_CLOUD_SEED = 42
+_MAIN_CLOUD_VERTS = None
+_MAIN_CLOUD_BASE_COLORS = None
 
 # Arah cahaya (dinormalisasi)
 _LIGHT_DIR_RAW = (0.5, 1.0, 0.3)
@@ -169,8 +160,8 @@ LIGHT_DIR = tuple(x / _lmag for x in _LIGHT_DIR_RAW)
 #  DRAW SKY
 # ================================================================
 
-def draw_sky():
-    """Gradient langit — fullscreen quad, tidak terpengaruh depth."""
+def draw_sky(bottom_color, top_color):
+    """Gradient langit dinamis — fullscreen quad, tidak terpengaruh depth."""
     glPushAttrib(GL_ENABLE_BIT | GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT)
 
     glDisable(GL_DEPTH_TEST)
@@ -187,12 +178,10 @@ def draw_sky():
     glLoadIdentity()
 
     glBegin(GL_QUADS)
-    r, g, b = SKY_BOTTOM
-    glColor3f(r, g, b)
+    glColor3f(*bottom_color)
     glVertex2f(0, 0)
     glVertex2f(1, 0)
-    r, g, b = SKY_TOP
-    glColor3f(r, g, b)
+    glColor3f(*top_color)
     glVertex2f(1, 1)
     glVertex2f(0, 1)
     glEnd()
@@ -204,22 +193,14 @@ def draw_sky():
     glPopAttrib()
 
 
-# Display list cache: {seed: gl_list_id}
-_CLOUD_DISPLAY_LISTS = {}
-
-
-def _compile_cloud_display_list(seed):
-    """
-    Compile satu awan ke OpenGL Display List.
-    Semua perhitungan warna/normal dilakukan SEKALI di sini,
-    lalu disimpan di GPU. Render tinggal glCallList() — sangat cepat.
-    """
-    faces = _CLOUD_MESHES[seed]
+def _init_main_cloud():
+    global _MAIN_CLOUD_VERTS, _MAIN_CLOUD_BASE_COLORS
+    faces = _build_cloud_mesh(_MAIN_CLOUD_SEED, num_blobs=9)
     lx, ly, lz = LIGHT_DIR
-
-    dl = glGenLists(1)
-    glNewList(dl, GL_COMPILE)
-    glBegin(GL_TRIANGLES)
+    
+    verts = []
+    colors = []
+    
     for v0, v1, v2, n, shade_var in faces:
         nx, ny, nz = n
         dot = max(0.0, nx*lx + ny*ly + nz*lz)
@@ -231,22 +212,33 @@ def _compile_cloud_display_list(seed):
         r = max(0.55, min(1.0, bright - shadow_t * 0.10))
         g = max(0.55, min(1.0, bright - shadow_t * 0.07))
         b = max(0.60, min(1.0, bright + shadow_t * 0.05))
+        
+        verts.extend([v0, v1, v2])
+        colors.extend([(r, g, b), (r, g, b), (r, g, b)])
+        
+    _MAIN_CLOUD_VERTS = np.array(verts, dtype=np.float32)
+    _MAIN_CLOUD_BASE_COLORS = np.array(colors, dtype=np.float32)
 
-        glColor3f(r, g, b)
-        glVertex3f(*v0)
-        glVertex3f(*v1)
-        glVertex3f(*v2)
-    glEnd()
-    glEndList()
-    return dl
+# Definisi kelompok awan siklus (posisi relatif terhadap cloud_x)
+# (offset_x, offset_y, offset_z, scale)
+_CYCLE_CLOUDS = [
+    ( 0.0,  0.0,  0.0, 3.5), # Pusat (Awan paling besar)
+    ( 3.5,  0.5,  3.5, 2.4), # Kanan Depan
+    (-3.0,  0.2, -4.5, 2.8), # Kiri Belakang
+    ( 4.5, -0.3, -2.5, 2.2), # Kanan Belakang
+    (-4.0,  0.8,  2.5, 2.0), # Kiri Depan
+    ( 1.5,  1.2, -6.0, 2.5), # Tengah Belakang
+]
 
-
-def draw_clouds(time):
+def draw_clouds(time, cloud_x, cloud_water):
     """
-    Render awan low-poly 3D.
-    Geometry di-compile ke Display List → CPU tidak ngitung apa-apa per frame,
-    tinggal glTranslatef + glCallList per awan.
+    Render sekumpulan awan yang bergerak dan berubah warna bersama-sama
+    sebagai satu sistem siklus air. Tidak ada awan statis.
     """
+    global _MAIN_CLOUD_VERTS, _MAIN_CLOUD_BASE_COLORS
+    if _MAIN_CLOUD_VERTS is None:
+        _init_main_cloud()
+        
     glDisable(GL_LIGHTING)
     glEnable(GL_DEPTH_TEST)
     glDepthMask(GL_TRUE)
@@ -258,28 +250,100 @@ def draw_clouds(time):
 
     glEnable(GL_POLYGON_OFFSET_FILL)
     glPolygonOffset(1.0, 1.0)
+    
+    glEnableClientState(GL_VERTEX_ARRAY)
+    glEnableClientState(GL_COLOR_ARRAY)
+    glVertexPointer(3, GL_FLOAT, 0, _MAIN_CLOUD_VERTS)
 
-    for seed, base_x, y_off, base_z, scale, speed in _CLOUD_DEFS:
+    # ==========================================
+    # RENDER KELOMPOK AWAN SIKLUS AIR
+    # ==========================================
+    # Hitung warna awan berdasarkan kadar air: semakin penuh, semakin gelap
+    cloud_tint = 0.58 + (1.0 - cloud_water) * 0.42
+    cloud_tint = max(0.35, min(1.0, cloud_tint))
+    current_colors = _MAIN_CLOUD_BASE_COLORS * cloud_tint
+    
+    glColorPointer(3, GL_FLOAT, 0, current_colors)
 
-        # Build mesh (sekali)
-        if seed not in _CLOUD_MESHES:
-            _CLOUD_MESHES[seed] = _build_cloud_mesh(seed, num_blobs=7)
-
-        # Compile ke display list (sekali)
-        if seed not in _CLOUD_DISPLAY_LISTS:
-            _CLOUD_DISPLAY_LISTS[seed] = _compile_cloud_display_list(seed)
-
-        drift_x = math.sin(time * speed + seed * 1.3) * 1.8
-        drift_z = math.cos(time * speed * 0.35 + seed) * 0.4
-
+    for ox, oy, oz, scale in _CYCLE_CLOUDS:
         glPushMatrix()
-        glTranslatef(base_x + drift_x, CLOUD_HEIGHT + y_off, base_z + drift_z)
+        # Sedikit pergerakan organik (melayang) untuk masing-masing awan
+        drift_y = math.sin(time * 1.5 + ox) * 0.3
+        drift_x = math.sin(time * 0.8 + oz) * 0.5
+        drift_z = math.cos(time * 0.5 + ox) * 0.5
+
+        # Posisi pusat awan adalah cloud_x, ditambah offset relatif tiap awan
+        glTranslatef(cloud_x + ox + drift_x, CLOUD_HEIGHT + oy + drift_y + 1.0, oz + drift_z)
         glScalef(scale, scale * 0.58, scale * 0.78)
 
-        # Satu panggilan → GPU langsung render, tidak ada loop Python
-        glCallList(_CLOUD_DISPLAY_LISTS[seed])
-
+        glDrawArrays(GL_TRIANGLES, 0, len(_MAIN_CLOUD_VERTS))
         glPopMatrix()
+
+    glDisableClientState(GL_VERTEX_ARRAY)
+    glDisableClientState(GL_COLOR_ARRAY)
 
     glDisable(GL_POLYGON_OFFSET_FILL)
     glDisable(GL_CULL_FACE)
+
+
+def draw_cycle_arrows(time):
+    """Gambar panah besar untuk memperjelas siklus air"""
+    glDisable(GL_LIGHTING)
+    glDisable(GL_DEPTH_TEST) # Biar selalu kelihatan di atas elemen lain
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    
+    # 1. PANAH ANGIN (Kanan ke Kiri, di atas)
+    # Arah: x=6.0 ke x=-4.0, y=11.0
+    # Beranimasi sedikit maju mundur
+    offset = (time * 1.5) % 3.0
+    ax_start = 6.0 - offset
+    ax_end = -2.0 - offset
+    ay = 11.0
+    az = -2.0
+    
+    glColor4f(0.2, 0.6, 0.9, 0.8) # Biru muda
+    
+    # Batang panah angin
+    glLineWidth(8.0)
+    glBegin(GL_LINES)
+    glVertex3f(ax_start, ay, az)
+    glVertex3f(ax_end, ay, az)
+    glEnd()
+    
+    # Ujung panah angin (segitiga di kiri)
+    glBegin(GL_TRIANGLES)
+    glVertex3f(ax_end - 0.8, ay, az)
+    glVertex3f(ax_end + 0.4, ay + 0.6, az)
+    glVertex3f(ax_end + 0.4, ay - 0.6, az)
+    glEnd()
+
+    # 2. PANAH EVAPORASI (Dari laut naik ke atas)
+    # Gambar beberapa garis bergelombang dari X > 2.0
+    glLineWidth(3.0)
+    for i in range(4):
+        ex = 4.0 + i * 2.5
+        ez = 0.0 + (i % 2) * -2.0
+        ey_start = 0.0
+        ey_end = 6.0
+        
+        # Gambar garis lurus ke atas dengan ujung panah
+        anim_y = (time * 2.0 + i) % 4.0
+        curr_y = ey_start + anim_y
+        
+        glColor4f(0.3, 0.7, 0.9, 0.7)
+        glBegin(GL_LINES)
+        glVertex3f(ex, curr_y, ez)
+        glVertex3f(ex, curr_y + 1.5, ez)
+        glEnd()
+        
+        # Ujung panah evaporasi atas
+        glBegin(GL_TRIANGLES)
+        glVertex3f(ex, curr_y + 1.8, ez)
+        glVertex3f(ex - 0.2, curr_y + 1.4, ez)
+        glVertex3f(ex + 0.2, curr_y + 1.4, ez)
+        glEnd()
+
+    glEnable(GL_DEPTH_TEST)
+    glDisable(GL_BLEND)
+    glLineWidth(1.0)

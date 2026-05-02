@@ -21,26 +21,61 @@ def _generate_tree_positions(seed=42):
 
     positions = []
 
-    # Pohon di dataran rendah (dekat pantai, X kecil)
-    for _ in range(12):
-        x = rng.uniform(S * 0.5, N * S * 0.18)
-        z = rng.uniform(-(N / 2 - 1) * S, (N / 2 - 1) * S)
-        scale = rng.uniform(0.7, 1.1)
-        positions.append((x, 0.1, z, scale, 'lowland'))
+    import river
+    river_path = river.get_river_path()
+    
+    def is_too_close_to_river(tx, tz):
+        min_dist_sq = 9999.0
+        for rx, rz in river_path:
+            dx = tx - rx
+            dz = tz - rz
+            dist_sq = dx*dx + dz*dz
+            if dist_sq < min_dist_sq:
+                min_dist_sq = dist_sq
+        # Lebar sungai diperbesar, margin ditingkatkan agar lebih lega
+        return min_dist_sq < (3.5 ** 2)
 
-    # Pohon di lereng gunung (X tengah)
-    for _ in range(10):
-        x = rng.uniform(N * S * 0.10, N * S * 0.20)
-        z = rng.uniform(-(N / 2 - 2) * S, (N / 2 - 2) * S)
-        scale = rng.uniform(0.8, 1.3)
-        positions.append((x, 0.1, z, scale, 'slope'))
+    from terrain import get_world_y
 
-    # Pohon besar di sekitar kaki gunung
+    # Pohon di dataran rendah (menyebar agak jauh dari pantai, X = -10 to -6.5)
+    for _ in range(20):
+        for _attempt in range(15):
+            x = rng.uniform(-10.0, -6.5)
+            z = rng.uniform(-14.0, 14.0)
+            if not is_too_close_to_river(x, z):
+                scale = rng.uniform(0.7, 1.1)
+                positions.append((x, get_world_y(x, z), z, scale, 'lowland'))
+                break
+
+    # Pohon kelapa dekat pantai (X = -6.5 to -4.5)
     for _ in range(6):
-        x = rng.uniform(N * S * 0.12, N * S * 0.25)
-        z = rng.uniform(-S * 3, S * 3)
-        scale = rng.uniform(1.0, 1.5)
-        positions.append((x, 0.1, z, scale, 'mountain_base'))
+        for _attempt in range(15):
+            x = rng.uniform(-6.5, -4.5)
+            z = rng.uniform(-14.0, 14.0)
+            if not is_too_close_to_river(x, z):
+                scale = rng.uniform(0.8, 1.2)
+                positions.append((x, get_world_y(x, z), z, scale, 'coconut'))
+                break
+
+    # Pohon di area tengah dan lereng landai (X = -13 to -8)
+    for _ in range(25):
+        for _attempt in range(15):
+            x = rng.uniform(-13.0, -8.0)
+            z = rng.uniform(-14.0, 14.0)
+            if not is_too_close_to_river(x, z):
+                scale = rng.uniform(0.8, 1.3)
+                positions.append((x, get_world_y(x, z), z, scale, 'slope'))
+                break
+
+    # Pohon besar di sekitar kaki gunung di pojok kiri belakang
+    for _ in range(15):
+        for _attempt in range(15):
+            x = rng.uniform(-14.0, -9.0)
+            z = rng.uniform(-13.0, -6.0)
+            if not is_too_close_to_river(x, z):
+                scale = rng.uniform(1.0, 1.5)
+                positions.append((x, get_world_y(x, z), z, scale, 'mountain_base'))
+                break
 
     return positions
 
@@ -59,6 +94,8 @@ def draw_trees():
             _draw_round_tree(x, y, z, scale)
         elif tree_type == 'slope':
             _draw_pine_tree(x, y, z, scale)
+        elif tree_type == 'coconut':
+            _draw_coconut_tree(x, y, z, scale)
         else:  # mountain_base
             _draw_round_tree(x, y, z, scale * 0.9)
             # Tambah pine kecil di sebelahnya
@@ -199,6 +236,86 @@ def _draw_pine_tree(cx, base_y, cz, scale=1.0):
         glEnd()
 
 
+# ================= POHON KELAPA (PANTAI) =================
+def _draw_coconut_tree(cx, base_y, cz, scale=1.0):
+    """
+    Pohon kelapa melengkung dengan daun pelepah khas pantai.
+    Condong ke laut (X membesar).
+    """
+    trunk_h = 1.6 * scale
+    trunk_r = 0.06 * scale
+    tilt_x  = 0.6 * scale # Condong ke arah +X (laut)
+
+    glDisable(GL_LIGHTING)
+    
+    # ─── BATANG MELENGKUNG ───
+    SIDES = 6
+    glColor3f(0.42, 0.32, 0.18)
+    segments = 5
+    for i in range(segments):
+        t0 = i / segments
+        t1 = (i + 1) / segments
+        
+        # Kurva melengkung (parabola)
+        cx0 = cx + tilt_x * (t0 * t0)
+        cy0 = base_y + trunk_h * t0
+        r0  = trunk_r * (1.0 - t0 * 0.3)
+        
+        cx1 = cx + tilt_x * (t1 * t1)
+        cy1 = base_y + trunk_h * t1
+        r1  = trunk_r * (1.0 - t1 * 0.3)
+        
+        glBegin(GL_QUAD_STRIP)
+        for k in range(SIDES + 1):
+            angle = 2 * math.pi * k / SIDES
+            cos_a = math.cos(angle)
+            sin_a = math.sin(angle)
+            glVertex3f(cx0 + r0 * cos_a, cy0, cz + r0 * sin_a)
+            glVertex3f(cx1 + r1 * cos_a, cy1, cz + r1 * sin_a)
+        glEnd()
+
+    # ─── DAUN KELAPA ───
+    top_x = cx + tilt_x
+    top_y = base_y + trunk_h
+    
+    # 6 daun menjuntai
+    for angle_offset in range(6):
+        angle = 2 * math.pi * angle_offset / 6.0
+        leaf_len = 0.9 * scale
+        
+        # Posisi ujung daun
+        end_x = top_x + leaf_len * math.cos(angle)
+        end_z = cz + leaf_len * math.sin(angle)
+        end_y = top_y - 0.45 * scale
+        
+        # Posisi tengah daun (melengkung naik lalu turun)
+        mid_x = top_x + leaf_len * 0.4 * math.cos(angle)
+        mid_z = cz + leaf_len * 0.4 * math.sin(angle)
+        mid_y = top_y + 0.15 * scale
+        
+        perp_x = -math.sin(angle) * 0.15 * scale
+        perp_z = math.cos(angle) * 0.15 * scale
+        
+        glBegin(GL_TRIANGLES)
+        
+        # Segmen dalam (pangkal ke tengah)
+        glColor3f(0.25, 0.60, 0.20)
+        glVertex3f(top_x, top_y, cz)
+        glColor3f(0.20, 0.55, 0.15)
+        glVertex3f(mid_x + perp_x, mid_y, mid_z + perp_z)
+        glVertex3f(mid_x - perp_x, mid_y, mid_z - perp_z)
+        
+        # Segmen luar (tengah ke ujung)
+        glColor3f(0.20, 0.55, 0.15)
+        glVertex3f(mid_x + perp_x, mid_y, mid_z + perp_z)
+        glColor3f(0.15, 0.45, 0.10)
+        glVertex3f(end_x, end_y, end_z)
+        glColor3f(0.20, 0.55, 0.15)
+        glVertex3f(mid_x - perp_x, mid_y, mid_z - perp_z)
+        
+        glEnd()
+
+
 # ================= SEMAK-SEMAK KECIL =================
 def draw_bushes():
     """
@@ -211,14 +328,34 @@ def draw_bushes():
     N   = TERRAIN_SIZE
     S   = TERRAIN_SCALE
 
-    for _ in range(15):
-        x = rng.uniform(S * 0.3, N * S * 0.22)
-        z = rng.uniform(-(N / 2 - 1) * S, (N / 2 - 1) * S)
+    import river
+    river_path = river.get_river_path()
+    
+    def is_too_close_to_river(tx, tz):
+        min_dist_sq = 9999.0
+        for rx, rz in river_path:
+            dx = tx - rx
+            dz = tz - rz
+            dist_sq = dx*dx + dz*dz
+            if dist_sq < min_dist_sq:
+                min_dist_sq = dist_sq
+        return min_dist_sq < (3.5 ** 2)
+
+    from terrain import get_world_y
+
+    for _ in range(45):
+        for _attempt in range(15):
+            x = rng.uniform(-14.0, -5.0)
+            z = rng.uniform(-14.0, 14.0)
+            if not is_too_close_to_river(x, z):
+                break
+        
         scale = rng.uniform(0.25, 0.50)
+        base_y = get_world_y(x, z)
 
         # Semak = sphere kecil tanpa batang
         crown_r = 0.45 * scale
-        crown_y = 0.1 + crown_r * 0.8
+        crown_y = base_y + crown_r * 0.8
 
         STACKS = 3
         SLICES = 6

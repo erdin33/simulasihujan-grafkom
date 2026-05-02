@@ -3,8 +3,10 @@
 # ============================================================
 
 import random
+import math
 import numpy as np
 from OpenGL.GL import *
+from day_night import get_day_phase
 from config import (
     MAX_VAPOR, MAX_RAIN, CLOUD_HEIGHT,
     VAPOR_SPEED_Y, RAIN_SPEED_Y,
@@ -37,9 +39,14 @@ class ParticleSystem:
         self._v_timer = 0.0
         self._r_timer = 0.0
 
-        # Spawn vapor awal agar tidak kosong saat buka
+        # ── State Machine Awan ────────────────────
+        self.cloud_state = "CLEAR"
+        self.cloud_x = 5.0      # Mulai di atas laut
+        self.cloud_water = 0.0  # Kapasitas air awan (0.0=putih, 1.0=gelap)
+        self._heat = 0.0
+
+        # Spawn vapor awal
         self._fill_initial_vapor()
-        self._fill_initial_rain()
 
     # ────────────────────────────────────────────────
     #  INIT
@@ -51,10 +58,6 @@ class ParticleSystem:
                 break
             self._spawn_vapor(idx, sx, sy, sz)
 
-    def _fill_initial_rain(self):
-        for idx in range(MAX_RAIN // 3):
-            self._spawn_rain(idx)
-
     # ────────────────────────────────────────────────
     #  SPAWN
     # ────────────────────────────────────────────────
@@ -65,20 +68,20 @@ class ParticleSystem:
             y + random.uniform(0.0, 0.3),
             z + random.uniform(-0.4, 0.4),
         ]
-        # Naik ke atas, sedikit drift horizontal
+        # Gerakan uap beraturan: Awalnya hanya naik lurus ke atas
         self.v_vel[idx]  = [
-            random.uniform(-0.008, 0.008),
-            VAPOR_SPEED_Y + random.uniform(0.0, 0.03),
-            random.uniform(-0.008, 0.008),
+            0.0,
+            VAPOR_SPEED_Y + random.uniform(0.0, 0.02),
+            0.0,
         ]
-        self.v_alpha[idx] = random.uniform(0.35, 0.70)
+        self.v_alpha[idx] = random.uniform(0.40, 0.80)
         self.v_alive[idx] = True
 
     def _spawn_rain(self, idx):
-        # Spawn di area awan (di atas laut & gunung)
-        x = random.uniform(-12, 5)
-        z = random.uniform(-12, 12)
-        y = CLOUD_HEIGHT + random.uniform(0.0, 2.0)
+        # Spawn di area awan saat ini
+        x = self.cloud_x + random.uniform(-3.0, 3.0)
+        z = random.uniform(-4.5, 4.5)
+        y = CLOUD_HEIGHT + random.uniform(0.0, 1.0)
         self.r_pos[idx]  = [x, y, z]
         self.r_vel[idx]  = [
             random.uniform(-0.004, 0.004),
@@ -91,49 +94,111 @@ class ParticleSystem:
     # ────────────────────────────────────────────────
     #  UPDATE
     # ────────────────────────────────────────────────
-    def update(self, dt):
+    def update(self, dt, time):
+        # Memperlambat proses logika siklus air (awan, hujan, evaporasi)
+        dt = dt * 0.4
+        
         scale = dt * 60.0   # normalisasi ke 60 fps
+
+        phase = 0.25 #get_day_phase(time)
+        self._heat = max(0.0, math.sin(phase * math.pi * 2.0))
+        evap_power = 0.35 + self._heat * 1.05
+        rain_power = 0.8 + self.cloud_water * 0.6
+
+        # ── State Machine Awan ──
+        if self.cloud_state == "CLEAR":
+            if self._heat > 0.25 or self.cloud_water > 0.0:
+                self.cloud_state = "EVAPORATING"
+        elif self.cloud_state == "EVAPORATING":
+            if self.cloud_water >= 0.25:
+                self.cloud_state = "CLOUDING"
+        elif self.cloud_state == "CLOUDING":
+            self.cloud_x -= 1.8 * dt
+            if self.cloud_x <= -10.0:
+                self.cloud_x = -10.0
+            if self.cloud_water >= 0.50 and self.cloud_x <= -8.0:
+                self.cloud_state = "RAINING"
+        elif self.cloud_state == "RAINING":
+            self.cloud_water -= 0.20 * dt * rain_power
+            if self.cloud_water <= 0.0:
+                self.cloud_water = 0.0
+                self.cloud_state = "RETURNING"
+        elif self.cloud_state == "RETURNING":
+            self.cloud_x += 1.8 * dt
+            if self.cloud_x >= 5.0:
+                self.cloud_x = 5.0
+                self.cloud_state = "CLEAR"
 
         # ── Update Vapor ──
         av = self.v_alive
         if av.any():
             self.v_pos[av]   += self.v_vel[av] * scale
-            self.v_alpha[av] -= 0.0025 * scale
+            self.v_alpha[av] -= 0.0020 * scale
 
-            # Matikan: sudah tinggi (jadi awan) atau pudar
-            kill = av & ((self.v_pos[:, 1] > CLOUD_HEIGHT) | (self.v_alpha < 0.04))
+            # Naik lebih cepat saat panas lebih tinggi
+            self.v_vel[av, 1] += (
+                VAPOR_SPEED_Y * (0.45 + self._heat * 0.95)
+                - self.v_vel[av, 1]
+            ) * 0.04 * scale
+
+            # Aliran uap mengarah ke posisi awan saat ini
+            height_ratio = np.clip(self.v_pos[av, 1] / CLOUD_HEIGHT, 0.0, 1.0)
+            dx = self.cloud_x - self.v_pos[av, 0]
+            target_vel_x = np.clip(dx * 0.015, -0.06, 0.06) * height_ratio
+            self.v_vel[av, 0] += (target_vel_x - self.v_vel[av, 0]) * 0.03 * scale
+
+            # Cek partikel yang sampai awan
+            reached_cloud = av & (self.v_pos[:, 1] >= CLOUD_HEIGHT - 0.5)
+            faded = av & (self.v_alpha < 0.02)
+            
+            if self.cloud_state in ("EVAPORATING", "CLOUDING", "CLEAR"):
+                reached_count = np.sum(reached_cloud)
+                if reached_count > 0:
+                    self.cloud_water += reached_count * 0.0035 * evap_power
+                    self.cloud_water = min(1.0, self.cloud_water)
+                    if self.cloud_state == "EVAPORATING" and self.cloud_water >= 0.25:
+                        self.cloud_state = "CLOUDING"
+                    if self.cloud_state == "CLOUDING" and self.cloud_water >= 0.50 and self.cloud_x <= -8.0:
+                        self.cloud_state = "RAINING"
+            
+            kill = reached_cloud | faded
             self.v_alive[kill] = False
 
-        # Spawn vapor baru dari laut
-        self._v_timer += dt
-        if self._v_timer >= 0.04:
-            self._v_timer = 0.0
-            dead = np.where(~self.v_alive)[0]
-            if len(dead):
-                batch = min(8, len(dead))
-                sea   = self.terrain.get_sea_spawn_positions(batch)
-                for k, (sx, sy, sz) in enumerate(sea):
-                    if k >= len(dead):
-                        break
-                    self._spawn_vapor(dead[k], sx, sy, sz)
+        # Spawn vapor saat proses penguapan / saat awan kembali ke laut / awan bergerak
+        if self.cloud_state in ("CLEAR", "EVAPORATING", "CLOUDING", "RETURNING"):
+            self._v_timer += dt * (1.0 + self._heat * 1.2)
+            interval = 0.08 if self.cloud_state == "CLEAR" else 0.045
+            if self._v_timer >= interval:
+                self._v_timer = 0.0
+                dead = np.where(~self.v_alive)[0]
+                if len(dead):
+                    max_batch = 4 if self.cloud_state == "CLEAR" else min(12, 6 + int(self._heat * 10))
+                    batch = min(max_batch, len(dead))
+                    sea   = self.terrain.get_sea_spawn_positions(batch)
+                    for k, (sx, sy, sz) in enumerate(sea):
+                        if k >= len(dead):
+                            break
+                        self._spawn_vapor(dead[k], sx, sy, sz)
 
         # ── Update Rain ──
         ar = self.r_alive
         if ar.any():
             self.r_pos[ar]   += self.r_vel[ar] * scale
             self.r_alpha[ar] -= 0.003 * scale
-
-            # Matikan: menyentuh tanah atau pudar
             kill = ar & ((self.r_pos[:, 1] < -2.0) | (self.r_alpha < 0.04))
             self.r_alive[kill] = False
 
-        # Spawn hujan baru
-        self._r_timer += dt
-        if self._r_timer >= 0.018:
-            self._r_timer = 0.0
-            dead = np.where(~self.r_alive)[0]
-            for idx in dead[:10]:
-                self._spawn_rain(idx)
+        # Spawn hujan HANYA saat raining
+        if self.cloud_state == "RAINING":
+            self._r_timer += dt * rain_power
+            interval = 0.02
+            if self._r_timer >= interval:
+                self._r_timer = 0.0
+                dead = np.where(~self.r_alive)[0]
+                if len(dead):
+                    rain_count = min(len(dead), 12 + int(self.cloud_water * 24))
+                    for idx in dead[:rain_count]:
+                        self._spawn_rain(idx)
 
     # ────────────────────────────────────────────────
     #  DRAW
