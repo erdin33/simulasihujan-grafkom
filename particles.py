@@ -45,6 +45,7 @@ class ParticleSystem:
         self.cloud_water = 0.0  # Kapasitas air awan (0.0=putih, 1.0=gelap)
         self._heat = 0.0
         self._wait_timer = 0.0
+        self.rainbow_alpha = 0.0
 
         # Tidak ada vapor awal, tunggu fase evaporasi dimulai
 
@@ -131,6 +132,14 @@ class ParticleSystem:
             if self.cloud_x >= 5.0:
                 self.cloud_x = 5.0
                 self.cloud_state = "CLEAR"
+
+        # Update transparansi pelangi
+        if self.cloud_state == "RETURNING":
+            self.rainbow_alpha = min(1.0, self.rainbow_alpha + 0.5 * dt)
+        elif self.cloud_state == "CLEAR":
+            self.rainbow_alpha = max(0.0, self.rainbow_alpha - 0.15 * dt)
+        else:
+            self.rainbow_alpha = max(0.0, self.rainbow_alpha - 0.8 * dt)
 
         # ── Update Vapor ──
         av = self.v_alive

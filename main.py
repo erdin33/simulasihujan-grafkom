@@ -22,6 +22,7 @@ from sun      import draw_sun_and_moon
 from day_night import get_day_phase, get_sky_colors, draw_night_overlay
 
 from ui import draw_ui_box
+from rainbow import draw_rainbow
 
 
 def _blend_colors(c1, c2, t):
@@ -108,6 +109,9 @@ def render(camera, terrain, particles, time):
 
     # (Matahari tidak digambar sesuai permintaan)
     # draw_sun_and_moon(time)
+    
+    # Gambar pelangi jika muncul
+    draw_rainbow(particles.rainbow_alpha)
 
     # ─── SCENE DARATAN & LAUT ───
     terrain.draw()              # 🟩 Terrain darat (hijau)

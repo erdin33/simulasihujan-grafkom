@@ -13,7 +13,7 @@ def get_stage_text(state):
     elif state == "RAINING":
         return "FASE: PRESIPITASI\n\nSaat awan sudah jenuh,\nturunlah hujan (presipitasi)."
     elif state == "RETURNING":
-        return "FASE: SIKLUS BERULANG\n\nAwan kosong kembali ke laut\nuntuk memulai siklus baru."
+        return "FASE: PELANGI & SIKLUS BARU\n\nAwan kembali ke laut. Sinar matahari\nmembias pada sisa titik air hujan\ndi udara, membentuk pelangi."
     return ""
 
 def draw_text_with_shadow(surface, text, font, color, pos):
