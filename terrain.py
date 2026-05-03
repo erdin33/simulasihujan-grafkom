@@ -35,6 +35,11 @@ def get_world_y(x, z):
     hill2 = 1.0 * math.sin(x * 0.7 + 2.0) * math.cos(z * 0.5 - 1.0)
     hill_h = max(0.0, hill1 + hill2)
     
+    # Buat bukit yang di sebelah kanan (mendekati area tengah/sungai) jadi jauh lebih tinggi
+    # X berjalan dari -15 (kiri jauh) ke 0 (tengah). Semakin besar X, bukit makin tinggi.
+    right_boost = 1.0 + max(0.0, (x + 15.0) / 8.0) * 2.2
+    hill_h *= right_boost
+    
     # 3. Lembah Sungai (Ratakan bukit yang dekat dengan sungai)
     min_d2 = 999.0
     for rx, rz in _cached_river_path:
@@ -49,12 +54,24 @@ def get_world_y(x, z):
         t_valley = t_valley * t_valley * (3.0 - 2.0 * t_valley) # Smooth S-Curve
         hill_h *= t_valley
         
-    # 4. Hilangkan bukit di area depan (termasuk pasir dan padang rumput depan) agar rata
-    if x > -9.0:
+    # 4. Hilangkan bukit di area depan (termasuk pasir) agar rata, tapi biarkan bukit kanan tetap menjulang
+    if x > -5.0:
         hill_h = 0.0
-    elif x > -12.0:
-        t_taper = (-9.0 - x) / 3.0
+    elif x > -10.0:
+        t_taper = (-5.0 - x) / 5.0
         hill_h *= t_taper
+        
+    # 5. Taper ujung dunia (pinggiran luar kotak) agar bukit tidak terpotong tebing lurus
+    # Ujung kiri (X mendekati -15)
+    if x < -12.0:
+        t_edge_x = max(0.0, min(1.0, (x - (-15.0)) / 3.0)) # 0 di ujung -15, 1 di -12
+        hill_h *= t_edge_x
+        
+    # Ujung depan/belakang (Z mendekati -15 dan +15)
+    abs_z = abs(z)
+    if abs_z > 12.0:
+        t_edge_z = max(0.0, min(1.0, (15.0 - abs_z) / 3.0)) # 0 di ujung 15, 1 di 12
+        hill_h *= t_edge_z
         
     return base_h + hill_h
 

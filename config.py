@@ -17,7 +17,7 @@ SEA_LIMIT     = 0.38    # Fraksi grid yang jadi laut (kiri)
 MAX_VAPOR       = 600
 MAX_RAIN        = 800
 CLOUD_HEIGHT    = 7.0   # Ketinggian awan terbentuk (Y)
-VAPOR_SPEED_Y   = 0.05  # Kecepatan naik uap
+VAPOR_SPEED_Y   = 0.025  # Kecepatan naik uap diperlambat agar lebih lama di layar
 RAIN_SPEED_Y    = 0.10  # Kecepatan turun hujan
 
 # Kamera (posisi awal)

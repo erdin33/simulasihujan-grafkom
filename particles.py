@@ -44,9 +44,9 @@ class ParticleSystem:
         self.cloud_x = 5.0      # Mulai di atas laut
         self.cloud_water = 0.0  # Kapasitas air awan (0.0=putih, 1.0=gelap)
         self._heat = 0.0
+        self._wait_timer = 0.0
 
-        # Spawn vapor awal
-        self._fill_initial_vapor()
+        # Tidak ada vapor awal, tunggu fase evaporasi dimulai
 
     # ────────────────────────────────────────────────
     #  INIT
@@ -78,9 +78,9 @@ class ParticleSystem:
         self.v_alive[idx] = True
 
     def _spawn_rain(self, idx):
-        # Spawn di area awan saat ini
-        x = self.cloud_x + random.uniform(-3.0, 3.0)
-        z = random.uniform(-4.5, 4.5)
+        # Spawn di area awan saat ini (sangat lebar menutupi seluruh hutan)
+        x = self.cloud_x + random.uniform(-5.5, 5.5)
+        z = random.uniform(-16.0, 15.0)
         y = CLOUD_HEIGHT + random.uniform(0.0, 1.0)
         self.r_pos[idx]  = [x, y, z]
         self.r_vel[idx]  = [
@@ -107,19 +107,22 @@ class ParticleSystem:
 
         # ── State Machine Awan ──
         if self.cloud_state == "CLEAR":
-            if self._heat > 0.25 or self.cloud_water > 0.0:
+            self._wait_timer += dt
+            if self._wait_timer >= 5.0:  # Tunggu 5 detik di laut sebelum partikel uap naik
+                self._wait_timer = 0.0
                 self.cloud_state = "EVAPORATING"
         elif self.cloud_state == "EVAPORATING":
-            if self.cloud_water >= 0.25:
+            if self.cloud_water >= 0.15:  # Pindah ke fase kondensasi UI lebih awal saat uap mulai kumpul
                 self.cloud_state = "CLOUDING"
         elif self.cloud_state == "CLOUDING":
-            self.cloud_x -= 1.8 * dt
-            if self.cloud_x <= -10.0:
-                self.cloud_x = -10.0
-            if self.cloud_water >= 0.50 and self.cloud_x <= -8.0:
-                self.cloud_state = "RAINING"
+            if self.cloud_water >= 0.60:  # Kumpulkan uap sampai penuh sebelum bergeser
+                self.cloud_x -= 1.8 * dt
+                if self.cloud_x <= -10.0:
+                    self.cloud_x = -10.0
+                if self.cloud_x <= -8.0:      # Langsung hujan setelah sampai daratan
+                    self.cloud_state = "RAINING"
         elif self.cloud_state == "RAINING":
-            self.cloud_water -= 0.20 * dt * rain_power
+            self.cloud_water -= 0.04 * dt * rain_power  # Jauh lebih lambat agar durasi hujan lebih lama
             if self.cloud_water <= 0.0:
                 self.cloud_water = 0.0
                 self.cloud_state = "RETURNING"
@@ -133,7 +136,10 @@ class ParticleSystem:
         av = self.v_alive
         if av.any():
             self.v_pos[av]   += self.v_vel[av] * scale
-            self.v_alpha[av] -= 0.0020 * scale
+            if self.cloud_state in ("CLEAR", "EVAPORATING") or (self.cloud_state == "CLOUDING" and self.cloud_water < 0.60):
+                self.v_alpha[av] -= 0.0020 * scale
+            else:
+                self.v_alpha[av] -= 0.02 * scale  # Fade out lebih cepat saat awan geser
 
             # Naik lebih cepat saat panas lebih tinggi
             self.v_vel[av, 1] += (
@@ -151,28 +157,29 @@ class ParticleSystem:
             reached_cloud = av & (self.v_pos[:, 1] >= CLOUD_HEIGHT - 0.5)
             faded = av & (self.v_alpha < 0.02)
             
-            if self.cloud_state in ("EVAPORATING", "CLOUDING", "CLEAR"):
+            if self.cloud_state in ("EVAPORATING", "CLOUDING"):
                 reached_count = np.sum(reached_cloud)
                 if reached_count > 0:
-                    self.cloud_water += reached_count * 0.0035 * evap_power
+                    self.cloud_water += reached_count * 0.0025 * evap_power  # Pengisian air dikembalikan ke normal/sedikit lebih lambat
                     self.cloud_water = min(1.0, self.cloud_water)
-                    if self.cloud_state == "EVAPORATING" and self.cloud_water >= 0.25:
+                    if self.cloud_state == "EVAPORATING" and self.cloud_water >= 0.60:
                         self.cloud_state = "CLOUDING"
-                    if self.cloud_state == "CLOUDING" and self.cloud_water >= 0.50 and self.cloud_x <= -8.0:
+                    if self.cloud_state == "CLOUDING" and self.cloud_x <= -8.0:
                         self.cloud_state = "RAINING"
             
             kill = reached_cloud | faded
             self.v_alive[kill] = False
 
-        # Spawn vapor saat proses penguapan / saat awan kembali ke laut / awan bergerak
-        if self.cloud_state in ("CLEAR", "EVAPORATING", "CLOUDING", "RETURNING"):
+        # Spawn vapor HANYA saat proses penguapan (EVAPORATING)
+        # Di fase CLEAR, air berhenti menguap sejenak (jeda)
+        if self.cloud_state == "EVAPORATING":
             self._v_timer += dt * (1.0 + self._heat * 1.2)
-            interval = 0.08 if self.cloud_state == "CLEAR" else 0.045
+            interval = 0.045
             if self._v_timer >= interval:
                 self._v_timer = 0.0
                 dead = np.where(~self.v_alive)[0]
                 if len(dead):
-                    max_batch = 4 if self.cloud_state == "CLEAR" else min(12, 6 + int(self._heat * 10))
+                    max_batch = min(12, 6 + int(self._heat * 10))
                     batch = min(max_batch, len(dead))
                     sea   = self.terrain.get_sea_spawn_positions(batch)
                     for k, (sx, sy, sz) in enumerate(sea):

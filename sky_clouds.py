@@ -222,12 +222,18 @@ def _init_main_cloud():
 # Definisi kelompok awan siklus (posisi relatif terhadap cloud_x)
 # (offset_x, offset_y, offset_z, scale)
 _CYCLE_CLOUDS = [
-    ( 0.0,  0.0,  0.0, 3.5), # Pusat (Awan paling besar)
-    ( 3.5,  0.5,  3.5, 2.4), # Kanan Depan
-    (-3.0,  0.2, -4.5, 2.8), # Kiri Belakang
-    ( 4.5, -0.3, -2.5, 2.2), # Kanan Belakang
-    (-4.0,  0.8,  2.5, 2.0), # Kiri Depan
-    ( 1.5,  1.2, -6.0, 2.5), # Tengah Belakang
+    # Area Tengah
+    ( 0.0,  0.0,  0.0, 3.5), ( 3.5,  0.5,  3.5, 2.4), (-3.0,  0.2, -4.5, 2.8),
+    ( 4.5, -0.3, -2.5, 2.2), (-4.0,  0.8,  2.5, 2.0), ( 1.5,  1.2, -6.0, 2.5),
+    ( 2.5, -0.4,  1.5, 2.6), (-2.0,  1.5,  3.5, 2.3), ( 0.0,  1.8,  1.0, 2.5),
+    
+    # Perluasan Samping Kiri (Z Positif)
+    ( 1.0, -0.5,  6.5, 2.7), (-2.5,  0.8,  8.0, 2.4), ( 3.5,  0.2,  9.5, 2.6),
+    (-1.0,  1.2, 11.0, 2.8), ( 2.0, -0.2, 13.0, 2.2), (-3.5,  0.5, 14.5, 2.5),
+    
+    # Perluasan Samping Kanan (Z Negatif)
+    ( 0.5, -0.2, -8.5, 2.5), (-2.0,  0.9, -10.0, 2.3), ( 3.0,  0.4, -11.5, 2.7),
+    (-1.5,  1.5, -13.0, 2.1), ( 2.5, -0.5, -14.5, 2.6), (-3.0,  0.7, -15.5, 2.4),
 ]
 
 def draw_clouds(time, cloud_x, cloud_water):
@@ -259,8 +265,9 @@ def draw_clouds(time, cloud_x, cloud_water):
     # RENDER KELOMPOK AWAN SIKLUS AIR
     # ==========================================
     # Hitung warna awan berdasarkan kadar air: semakin penuh, semakin gelap
-    cloud_tint = 0.58 + (1.0 - cloud_water) * 0.42
-    cloud_tint = max(0.35, min(1.0, cloud_tint))
+    # Awan mendung (cumulonimbus) harus benar-benar gelap
+    cloud_tint = 1.0 - (cloud_water * 0.75)  # Jika water 1.0, warna tinggal 25% (gelap pekat)
+    cloud_tint = max(0.18, min(1.0, cloud_tint))
     current_colors = _MAIN_CLOUD_BASE_COLORS * cloud_tint
     
     glColorPointer(3, GL_FLOAT, 0, current_colors)

@@ -49,10 +49,10 @@ def get_river_path():
 
 
 # ================= GAMBAR SUNGAI =================
-def draw_river():
+def draw_river(time=0.0):
     """
     Gambar sungai sebagai strip quad berwarna biru di atas terrain.
-    Melayang perlahan mengikuti kemiringan daratan ke laut.
+    Melayang perlahan mengikuti kemiringan daratan ke laut dengan efek aliran.
     """
     glDisable(GL_LIGHTING)
 
@@ -112,14 +112,22 @@ def draw_river():
         glVertex3f(rx, ry, rz)
     glEnd()
 
-    # ─── Highlight tengah sungai (warna lebih terang) ───
+    # ─── Highlight tengah sungai (warna lebih terang & animasi mengalir) ───
     glBegin(GL_QUAD_STRIP)
     for i in range(total):
         x, z = path[i]
         t   = i / total
-        r   = 0.40 + 0.15 * t
-        g_v = 0.70 + 0.10 * t
+        
+        # Gelombang mengalir searah jalur sungai (waktu dikurangi indeks)
+        flow_wave = math.sin(time * 5.0 - i * 0.6)
+        
+        # Ubah warna highlight agar berkedip / seperti buih mengalir
+        r   = 0.40 + 0.15 * t + flow_wave * 0.12
+        g_v = 0.70 + 0.10 * t + flow_wave * 0.12
         b   = 0.95
+        
+        r = max(0.0, min(1.0, r))
+        g_v = max(0.0, min(1.0, g_v))
 
         # Normal sungai
         if i < total - 1:
@@ -137,8 +145,9 @@ def draw_river():
         ry = get_world_y(x, z) + 0.045
         glColor3f(r, g_v, b)
         
-        # Gambar highlight mengikuti arah aliran sungai (tegak lurus)
-        hl_w = WIDTH * 0.25
+        # Animasi lebar highlight (riak-riak air yang membesar dan mengecil)
+        hl_w = WIDTH * (0.2 + 0.12 * math.cos(time * 3.5 - i * 0.5))
+        
         glVertex3f(x + nx * hl_w, ry, z + nz * hl_w)
         glVertex3f(x - nx * hl_w, ry, z - nz * hl_w)
     glEnd()
