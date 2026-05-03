@@ -145,8 +145,6 @@ def render(camera, terrain, particles, time):
 
     # ─── SCENE (urutan penting untuk depth) ───
     terrain.draw()              # 🟩 Terrain darat (hijau)
-    draw_sea(time)              # 🌊 Laut bergelombang
-
     draw_underground_flow()     # 💧 Aliran bawah tanah
 
     draw_river()                # 🏞️ Sungai (di atas terrain)
@@ -157,6 +155,7 @@ def render(camera, terrain, particles, time):
     particles.draw()            # 💨 Partikel uap & hujan
     
     # draw_night_overlay(phase)   # Dihapus agar siang terus
+    draw_sea(time)              # 🌊 Laut bergelombang
 
 
 # ================= MAIN =================
