@@ -1,7 +1,6 @@
 import math
-import pyrr
 from pyrr import Vector3, vector3, vector, matrix44
-from pygame.locals import K_w, K_s, K_a, K_d, K_q, K_e
+from pygame.locals import K_w, K_s, K_a, K_d, K_q, K_e, K_LSHIFT
 from config import CAM_START_POS, CAM_START_YAW, CAM_START_PITCH, CAM_SPEED, CAM_SENS
 
 class Camera:
@@ -48,15 +47,19 @@ class Camera:
         self._update_vectors()
 
     def move(self, keys):
+        if keys[K_LSHIFT]:
+            current_speed = self.speed * 3.0
+        else:
+            current_speed = self.speed
         # Pyrr Vector3 objects handle scalar multiplication and addition natively
-        if keys[K_w]: self.pos += self.front * self.speed
-        if keys[K_s]: self.pos -= self.front * self.speed
-        if keys[K_a]: self.pos -= self.right * self.speed
-        if keys[K_d]: self.pos += self.right * self.speed
+        if keys[K_w]: self.pos += self.front * current_speed
+        if keys[K_s]: self.pos -= self.front * current_speed
+        if keys[K_a]: self.pos -= self.right * current_speed
+        if keys[K_d]: self.pos += self.right * current_speed
         
         # Use .y property for cleaner access
-        if keys[K_q]: self.pos.y -= self.speed
-        if keys[K_e]: self.pos.y += self.speed
+        if keys[K_q]: self.pos.y -= current_speed
+        if keys[K_e]: self.pos.y += current_speed
 
     def get_view_matrix(self):
         # Remove all redundant numpy conversions. 
