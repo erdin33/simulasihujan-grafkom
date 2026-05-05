@@ -109,10 +109,6 @@ def render(camera, terrain, particles, time):
 
     # (Matahari tidak digambar sesuai permintaan)
     # draw_sun_and_moon(time)
-    
-    # Gambar pelangi jika muncul
-    draw_rainbow(particles.rainbow_alpha)
-
     # ─── SCENE DARATAN & LAUT ───
     terrain.draw()              # 🟩 Terrain darat (hijau)
     draw_sea(time)              # 🌊 Laut bergelombang
@@ -120,6 +116,9 @@ def render(camera, terrain, particles, time):
     draw_river(time)            # 🏞️ Sungai (di atas terrain)
     draw_trees()                # 🌳 Pohon-pohon
     draw_bushes()               # 🌿 Semak-semak
+
+    # Gambar pelangi jika muncul (setelah semua objek solid agar kedalaman (depth) transparan berfungsi benar)
+    draw_rainbow(particles.rainbow_alpha)
 
     # ─── OVERLAY MENDUNG DI PERMUKAAN BUMI ───
     # Karena awan cumulonimbus menutupi matahari, area di bawah awan menjadi gelap
