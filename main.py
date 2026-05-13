@@ -111,10 +111,7 @@ def render(camera, terrain, particles, time):
     # draw_sun_and_moon(time)
     # ─── SCENE DARATAN & LAUT ───
     terrain.draw()              # 🟩 Terrain darat (hijau)
-<<<<<<< HEAD
     draw_sea(time)              # 🌊 Laut bergelombang
-=======
->>>>>>> ca991069cdabe3776f220fa529e87e2108cf43e2
     draw_underground_flow()     # 💧 Aliran bawah tanah
     draw_river(time)            # 🏞️ Sungai (di atas terrain)
     draw_trees()                # 🌳 Pohon-pohon
@@ -131,14 +128,9 @@ def render(camera, terrain, particles, time):
     draw_clouds(time, particles.cloud_x, particles.cloud_water) # ☁️ Awan Siklus Air
     particles.draw()            # 💨 Partikel uap & hujan
     
-<<<<<<< HEAD
     # UI Text Info Box
     viewport = glGetIntegerv(GL_VIEWPORT)
     draw_ui_box(particles.cloud_state, viewport[2], viewport[3])
-=======
-    # draw_night_overlay(phase)   # Dihapus agar siang terus
-    draw_sea(time)              # 🌊 Laut bergelombang
->>>>>>> ca991069cdabe3776f220fa529e87e2108cf43e2
 
 
 # ================= MAIN =================

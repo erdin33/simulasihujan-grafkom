@@ -36,7 +36,6 @@ def get_world_y(x, z):
     hill1 = 1.8 * math.sin(x * 0.3) * math.sin(z * 0.3)
     hill2 = 1.0 * math.sin(x * 0.7 + 2.0) * math.cos(z * 0.5 - 1.0)
     hill_h = max(0.0, hill1 + hill2)
-<<<<<<< HEAD
     
     # Buat bukit yang di sebelah kanan (mendekati area tengah/sungai) jadi jauh lebih tinggi
     # X berjalan dari -15 (kiri jauh) ke 0 (tengah). Semakin besar X, bukit makin tinggi.
@@ -49,19 +48,10 @@ def get_world_y(x, z):
         d2 = (rx - x)**2 + (rz - z)**2
         if d2 < min_d2:
             min_d2 = d2
-=======
-
-    # 3. Lembah sungai — early-exit loop
-    ra = _cached_river_arr
-    dx = ra[:, 0] - x
-    dz = ra[:, 1] - z
-    min_d2 = float(np.min(dx*dx + dz*dz))
->>>>>>> ca991069cdabe3776f220fa529e87e2108cf43e2
     d = math.sqrt(min_d2)
 
     valley_radius = 4.0
     if d < valley_radius:
-<<<<<<< HEAD
         t_valley = d / valley_radius
         t_valley = t_valley * t_valley * (3.0 - 2.0 * t_valley) # Smooth S-Curve
         hill_h *= t_valley
@@ -85,18 +75,6 @@ def get_world_y(x, z):
         t_edge_z = max(0.0, min(1.0, (15.0 - abs_z) / 3.0)) # 0 di ujung 15, 1 di 12
         hill_h *= t_edge_z
         
-=======
-        tv = d / valley_radius
-        tv = tv * tv * (3.0 - 2.0 * tv)
-        hill_h *= tv
-
-    # 4. Taper area depan
-    if x > -9.0:
-        hill_h = 0.0
-    elif x > -12.0:
-        hill_h *= (-9.0 - x) / 3.0
-
->>>>>>> ca991069cdabe3776f220fa529e87e2108cf43e2
     return base_h + hill_h
 
 

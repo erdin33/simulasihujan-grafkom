@@ -222,7 +222,8 @@ class ParticleSystem:
     def draw(self):
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        glDisable(GL_DEPTH_TEST)   # partikel tidak saling occlude
+        glEnable(GL_DEPTH_TEST)
+        glDepthMask(GL_FALSE)
 
         # ── Vapor: titik putih-biru ──────────────
         glPointSize(3.5)
@@ -247,7 +248,7 @@ class ParticleSystem:
                 glVertex3f(px, py + 0.35, pz)
         glEnd()
 
-        glEnable(GL_DEPTH_TEST)
+        glDepthMask(GL_TRUE)
         glDisable(GL_BLEND)
 
     # ── Info untuk title bar ──
