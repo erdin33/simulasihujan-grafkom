@@ -11,6 +11,7 @@ TITLE       = "Simulasi Siklus Air — OpenGL"
 # Terrain
 TERRAIN_SIZE  = 120     # Grid NxN (diperbesar agar jauh lebih mulus)
 TERRAIN_SCALE = 0.25    # Jarak antar titik diperkecil (unit OpenGL)
+TERRAIN_OFFSET_X = 100.0
 SEA_LIMIT     = 0.38    # Fraksi grid yang jadi laut (kiri)
 
 # Partikel
