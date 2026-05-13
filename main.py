@@ -154,16 +154,17 @@ def main():
     print("=== SIMULASI SIKLUS AIR ===")
     print("  W/A/S/D  : Gerak kamera")
     print("  Mouse    : Lihat sekeliling")
+    print("  SPACE/P  : Pause/Resume")
     print("  ESC      : Keluar")
 
     pygame.event.set_grab(True)
     pygame.mouse.set_visible(False)
 
     is_focused = True
+    is_paused = False
 
     while True:
         dt    = clock.tick(FPS) / 1000.0
-        time += dt
 
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -172,6 +173,8 @@ def main():
             if event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     pygame.quit(); sys.exit()
+                if event.key in (K_SPACE, K_p):
+                    is_paused = not is_paused
 
             if event.type == VIDEORESIZE:
                 current_w, current_h = event.w, max(event.h, 1)
@@ -197,14 +200,17 @@ def main():
         keys = pygame.key.get_pressed()
         camera.move(keys)
 
-        particles.update(dt, time)
+        if not is_paused:
+            time += dt
+            particles.update(dt, time)
 
         render(camera, terrain, particles, time)
         pygame.display.flip()
 
         v_count, r_count = particles.stats()
+        pause_text = " [PAUSED]" if is_paused else ""
         pygame.display.set_caption(
-            f"{TITLE} | Uap: {v_count} | Hujan: {r_count} | FPS: {clock.get_fps():.0f}"
+            f"{TITLE}{pause_text} | Uap: {v_count} | Hujan: {r_count} | FPS: {clock.get_fps():.0f}"
         )
 
 
